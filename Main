@@ -1,0 +1,67 @@
+
+// ==UserScript==
+// @name         MovieSyncPlugin
+// @version      1.0
+// @description  Синхронизация фильмов из Google Collections в LAMPA TV
+// @match        *://*/*  
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    const collectionUrl = 'https://www.google.com/collections/s/list/XusmdGiUZ_bHxS9vB1En-IgzwDQoJQ/ZDJcFra9fcc'; // Замените на ваш URL коллекции
+
+    function init() {
+        fetch(collectionUrl)
+            .then(response => response.text())
+            .then(data => {
+                const movies = parseMovies(data);
+                addMoviesToLampa(movies);
+            })
+            .catch(error => console.error('Ошибка при получении данных:', error));
+    }
+
+    function parseMovies(data) {
+        const movies = [];
+        const parser = new DOMParser();
+        const htmlDocument = parser.parseFromString(data, 'text/html');
+
+        // Допустим, ваши фильмы находятся в HTML-элементах с классом 'movie-item'
+        const movieElements = htmlDocument.querySelectorAll('.movie-item');
+        movieElements.forEach(element => {
+            const title = element.querySelector('.movie-title').innerText; // Предположим, название в элементе с классом 'movie-title'
+            const link = element.querySelector('a').href; // Ссылка на фильм
+            const poster = element.querySelector('img').src; // Постер фильма
+
+            // Добавляем фильм в массив
+            movies.push({ title, link, poster });
+        });
+
+        return movies;
+    }
+
+    function addMoviesToLampa(movies) {
+        const lampaContainer = document.getElementById('lampa-movie-list'); // Здесь может быть ID или класс вашего контейнера в LAMPA TV
+
+        if (!lampaContainer) {
+            console.error('Контейнер для фильмов не найден.');
+            return;
+        }
+
+        movies.forEach(movie => {
+            const movieElement = document.createElement('div');
+            movieElement.className = 'lampa-movie';
+
+            movieElement.innerHTML = `
+                <img src="${movie.poster}" alt="${movie.title}" />
+                <h4>${movie.title}</h4>
+                <a href="${movie.link}" target="_blank">Смотреть</a>
+            `;
+
+            lampaContainer.appendChild(movieElement);
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+
+})();
