@@ -1,67 +1,81 @@
+(function(plugin) {
+    const COLLECTION_URL = 'https://www.google.com/collections/s/list/XusmdGiUZ_bHxS9vB1En-IgzwDQoJQ/dxI7ANbJwms';
 
-// ==UserScript==
-// @name         MovieSyncPlugin
-// @version      1.0
-// @description  Синхронизация фильмов из Google Collections в LAMPA TV
-// @match        *://*/*  
-// ==/UserScript==
+    plugin.create = function() {
+        // Добавляем вкладку "Коллекция Google"
+        Lampa.Component.add('google_collection', {
+            name: 'Коллекция Google',
+            type: 'category',
+            body: function(body, head) {
+                head.empty().append('<div class="layer--title">Коллекция Google</div>');
+                body.empty().append('<div class="layer--content"><div class="empty__text">Загрузка...</div></div>');
 
-(function() {
-    'use strict';
+                // Загрузка данных
+                plugin.loadCollection((items) => {
+                    if (items.length) {
+                        body.empty();
+                        items.forEach((item) => {
+                            let card = Lampa.Template.get('card', {
+                                title: item.title,
+                                poster: item.poster
+                            });
+                            card.on('hover:enter', () => {
+                                Lampa.Player.play(item.url); // Запуск фильма
+                            });
+                            body.append(card);
+                        });
+                    } else {
+                        body.find('.empty__text').text('Коллекция пуста.');
+                    }
+                });
+            }
+        });
 
-    const collectionUrl = 'https://www.google.com/collections/s/list/XusmdGiUZ_bHxS9vB1En-IgzwDQoJQ/ZDJcFra9fcc'; // Замените на ваш URL коллекции
+        // Добавляем пункт в меню
+        Lampa.Settings.add({
+            title: 'Коллекция Google',
+            icon: 'bookmarks',
+            onSelect: () => {
+                Lampa.Activity.push({
+                    url: '',
+                    component: 'google_collection',
+                    type: 'category'
+                });
+            }
+        });
+    };
 
-    function init() {
-        fetch(collectionUrl)
-            .then(response => response.text())
-            .then(data => {
-                const movies = parseMovies(data);
-                addMoviesToLampa(movies);
+    // Функция для загрузки коллекции
+    plugin.loadCollection = function(callback) {
+        fetch(COLLECTION_URL)
+            .then((response) => response.text())
+            .then((html) => {
+                let parser = new DOMParser();
+                let doc = parser.parseFromString(html, 'text/html');
+                
+                // Парсим фильмы (находим нужные элементы)
+                let items = [];
+                let movieElements = doc.querySelectorAll('.collection-item'); // Убедитесь в правильности класса
+                movieElements.forEach((el) => {
+                    let title = el.querySelector('.title').innerText;
+                    let poster = el.querySelector('img').src;
+                    let url = el.querySelector('a').href;
+                    items.push({ title, poster, url });
+                });
+
+                callback(items);
             })
-            .catch(error => console.error('Ошибка при получении данных:', error));
-    }
+            .catch((error) => {
+                console.error('Ошибка при загрузке коллекции:', error);
+                callback([]);
+            });
+    };
 
-    function parseMovies(data) {
-        const movies = [];
-        const parser = new DOMParser();
-        const htmlDocument = parser.parseFromString(data, 'text/html');
+    plugin.start = function() {
+        plugin.create();
+    };
 
-        // Допустим, ваши фильмы находятся в HTML-элементах с классом 'movie-item'
-        const movieElements = htmlDocument.querySelectorAll('.movie-item');
-        movieElements.forEach(element => {
-            const title = element.querySelector('.movie-title').innerText; // Предположим, название в элементе с классом 'movie-title'
-            const link = element.querySelector('a').href; // Ссылка на фильм
-            const poster = element.querySelector('img').src; // Постер фильма
+    plugin.stop = function() {};
 
-            // Добавляем фильм в массив
-            movies.push({ title, link, poster });
-        });
-
-        return movies;
-    }
-
-    function addMoviesToLampa(movies) {
-        const lampaContainer = document.getElementById('lampa-movie-list'); // Здесь может быть ID или класс вашего контейнера в LAMPA TV
-
-        if (!lampaContainer) {
-            console.error('Контейнер для фильмов не найден.');
-            return;
-        }
-
-        movies.forEach(movie => {
-            const movieElement = document.createElement('div');
-            movieElement.className = 'lampa-movie';
-
-            movieElement.innerHTML = `
-                <img src="${movie.poster}" alt="${movie.title}" />
-                <h4>${movie.title}</h4>
-                <a href="${movie.link}" target="_blank">Смотреть</a>
-            `;
-
-            lampaContainer.appendChild(movieElement);
-        });
-    }
-
-    document.addEventListener("DOMContentLoaded", init);
-
-})();
+    plugin.start();
+})(this);
